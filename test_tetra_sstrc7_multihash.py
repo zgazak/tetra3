@@ -12,6 +12,8 @@ import seaborn as sns
 from astropy import wcs
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
+import arrow
+from shs.eval.wcs import astrometry_server
 
 base_path = "../spectranet_hyperspectral/.scratch/shs_oft/"
 
@@ -119,10 +121,14 @@ def plot_cat(solution, ax):
 
 width = 512
 height = 512
+dpi = 150
+
 # convert lines to centroids
 for idx in range(len(lines["images"])):
+    idx += 0
     lim_mag = 19
-
+    fname = "%.9i_ast.png" % idx
+    result[fname] = {}
     # star list, ordered by decreasing flux
     stars = [
         [annot["line"][1], annot["line"][0], annot["mag"]]
@@ -158,7 +164,14 @@ for idx in range(len(lines["images"])):
 
     # are x and y switched?
     # stars = [[s[1], s[0]] for s in stars]
-
+    anet_list = [
+        {
+            "xpix": annot[1],
+            "ypix": annot[0],
+            "flux": 1e7 * 10 ** (annot[2] / -2.5),
+        }
+        for annot in stars
+    ]
     stars = np.array([s[:2] for s in stars])
 
     print(len(stars))
@@ -210,46 +223,73 @@ for idx in range(len(lines["images"])):
     count = 20
     # while solution["RA"] is None and count < 21:
     pcs = count
+    t0 = arrow.now()
     solution = t3.solve_from_centroids2(
         stars,
         512,
         512,
-        pattern_checking_stars=pcs,
+        pattern_checking_stars=10,
         match_threshold=1e-4,
+        match_radius=0.001,
         fov_estimate=0.18,
         fov_max_error=0.01,
     )
-    count += 1
+    # pdb.set_trace()
+    result[fname]["t"] = {"tfit": (arrow.now() - t0).total_seconds()}
+
+    t0 = arrow.now()
+    astronetsol = astrometry_server(
+        "http://localhost:8080/",
+        anet_list,
+        width=width,
+        height=height,
+        fov_upper_bound=0.2,
+    )
+    result[fname]["a"] = {
+        "tfit": (arrow.now() - t0).total_seconds(),
+        "resp": astronetsol[1],
+    }
+
+    if astronetsol[1] == 200:
+        offset_error_deg = (180 / np.pi) * np.arctan2(
+            np.sin(np.deg2rad(ra) - np.deg2rad(astronetsol[0][0].header["CRVAL1"])),
+            np.cos(np.deg2rad(dec) - np.deg2rad(astronetsol[0][0].header["CRVAL2"])),
+        )
+        result[fname]["a"]["err"] = np.abs(offset_error_deg)
 
     # print(count, json.dumps(solution, indent=1))
     print(ra, dec)
 
-    dpi = 150
+    fig = plt.figure(
+        frameon=False, figsize=(1 * width / dpi, 1 * height / dpi), dpi=dpi
+    )
+    ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
+    ax.set_axis_off()
+    fig.add_axes(ax)
+    ax.imshow(arr, cmap="Greys_r")  # , aspect="auto")
+
     if solution["RA"] is not None:
+        result[fname]["t"]["resp"] = 200
         print(solution["RA"], solution["Dec"], solution["Roll"])
         offset_error_deg = (180 / np.pi) * np.arctan2(
             np.sin(np.deg2rad(ra) - np.deg2rad(solution["RA"])),
             np.cos(np.deg2rad(dec) - np.deg2rad(solution["Dec"])),
         )
-        result[idx] = offset_error_deg
+        result[fname]["t"]["err"] = np.abs(offset_error_deg)
 
         solution["width"] = width
         solution["height"] = height
 
-        fig = plt.figure(
-            frameon=False, figsize=(1 * width / dpi, 1 * height / dpi), dpi=dpi
-        )
         # ax = fig.add_subplot(1, 1, 1)
-        ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
-        ax.set_axis_off()
-        fig.add_axes(ax)
-        ax.imshow(arr, cmap="Greys_r")  # , aspect="auto")
         plot_annot(stars, ax)
         plot_cat(solution, ax)
         ax.set_axis_off()
         # ax.tight_layout()
-        fig.savefig("%.9i_ast.png" % idx, dpi=dpi)
+        fig.savefig(fname, dpi=dpi)
     else:
-        result[idx] = None
+        result[fname]["t"]["resp"] = 204
 
     print(json.dumps(result, indent=1))
+
+    with open("comp_result.json", "w") as fp:
+        fp.write(json.dumps(result, indent=4))
