@@ -530,7 +530,7 @@ class Tetra3:
             "/home/zach.gazak/wd/pivot/plates/data/b1_358_-4.csv"
         )
         if star_catalog == "sstrc7":
-            catalog_file_full_pathname = Path("/home/zach.gazak/wd/sstrc7")
+            catalog_file_full_pathname = Path("/data/shared/sstrc7")
         assert catalog_file_full_pathname.exists(), "No star catalogue found at " + str(
             catalog_file_full_pathname
         )

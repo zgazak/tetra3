@@ -12,8 +12,7 @@ import seaborn as sns
 from astropy import wcs
 from astropy.io import fits
 from astropy.coordinates import SkyCoord
-import matplotlib
-matplotlib.use('Agg')
+
 base_path = "/data/zgazak/coco/shs_oft/"
 
 lines = json.load(
@@ -169,14 +168,8 @@ for idx in range(len(lines["images"])):
     t3 = tetra3.Tetra3()
     pattern_size = 4
     num_per_fov = 6
-    db_name = "tinyFOVallstar_%.1f_%i_%i_%i_%i_%i" % (
-        fov,
-        int(ra_grid),
-        int(dec_grid),
-        int(grid_rad),
-        pattern_size,
-        num_per_fov,
-    )
+    db_name = "tinyFOVallstar_%.1f_allsky" % (
+        fov)
 
     db_path = Path(__file__).parent / (db_name + ".npz")
 
@@ -195,7 +188,7 @@ for idx in range(len(lines["images"])):
                 pattern_size=pattern_size,
                 temporal_corr=True,
                 center_radec=[ra_grid, dec_grid],
-                radec_radius_degrees=grid_rad,
+                radec_radius_degrees=500,
             )
         except:
             print("database build failed")
