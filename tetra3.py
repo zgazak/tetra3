@@ -1891,7 +1891,7 @@ class Tetra3:
         match_list = []
         already_seen_quads = []
         for hash_idx in tqdm(
-            list(hash_lookups.keys())[0:30], ascii=True, desc="searching quads"
+            list(hash_lookups.keys())[0:50], ascii=True, desc="searching quads"
         ):
             hash_code_space = hash_lookups[hash_idx]["hash_code_space"]
             pattern_edge_ratios = hash_lookups[hash_idx]["pattern_edge_ratios"]
@@ -2151,7 +2151,7 @@ class Tetra3:
             radecroll = []
             match_nums = sorted([match["num_star_matches"] for match in match_list])
             match_ratios = sorted([match["match_cat_ratio"] for match in match_list])
-
+            """
             use = ("match_cat_ratio", 0.5, match_ratios)
             print(use)
             for match in match_list:
@@ -2167,23 +2167,93 @@ class Tetra3:
             medstd_ra = [np.median(ras), circstd(ras)]
             medstd_dec = [np.median(decs), circstd(decs, high=np.pi, low=-np.pi)]
             medstd_roll = [np.median(rolls), circstd(rolls)]
+            """
 
-            sig = 2
+            if len(match_list) == 0:
+                return {"RA": None}
+            elif len(match_list) == 1:
+                besthash = match_list
+                radecroll = [rot2radecroll(match_list[0]["rotation_matrix"])]
+            distances = []
+            for idx, match in enumerate(match_list):
+                for idxc, matchc in enumerate(match_list):
+                    if idx != idxc:
+                        rm1 = match["rotation_matrix"]
+                        rm2 = matchc["rotation_matrix"]
+                        distance = np.arccos(((rm1.dot(rm2.T)).trace() - 1) / 2)
+                        distances.append([idx, idxc, distance])
+            good_matches = []
             bhs = []
             rdrs = []
-            for bh, rdr in zip(besthash, radecroll):
-                if (
-                    rdr[0] > (medstd_ra[0] - sig * medstd_ra[1])
-                    and rdr[0] < (medstd_ra[0] + sig * medstd_ra[1])
-                    and rdr[1] > (medstd_dec[0] - sig * medstd_dec[1])
-                    and rdr[1] < (medstd_dec[0] + sig * medstd_dec[1])
-                    and rdr[2] > (medstd_roll[0] - sig * medstd_roll[1])
-                    and rdr[2] < (medstd_roll[0] + sig * medstd_roll[1])
-                ):
-                    bhs.append(bh)
-                    rdrs.append(rdr)
+            besthash = []
+            radecroll = []
+            for q1, q2, dist in distances:
+                if dist <= 0.1 * fov:
+                    if q1 not in good_matches:
+                        besthash.append(match_list[q1])
+                        radecroll.append(
+                            rot2radecroll(match_list[q1]["rotation_matrix"])
+                        )
+                        good_matches.append(q1)
+                    if q2 not in good_matches:
+                        besthash.append(match_list[q2])
+                        radecroll.append(
+                            rot2radecroll(match_list[q2]["rotation_matrix"])
+                        )
+                        good_matches.append(q2)
+            if len(radecroll) == 0:
+                use = ("match_cat_ratio", 0.5, match_ratios)
+                print(use)
+                for match in match_list:
+                    if match[use[0]] >= use[2][int(use[1] * len(use[2]))]:
+                        besthash.append(match)
+                        radecroll.append(rot2radecroll(match["rotation_matrix"]))
+                    else:
+                        pass
+                        # print(match[use[0]], use[2][int(use[1] * len(use[2]))])
+                ras = [t[0] for t in radecroll]
+                decs = [t[1] for t in radecroll]
+                rolls = [t[2] for t in radecroll]
+                medstd_ra = [np.median(ras), circstd(ras) + 0.000001]
+                medstd_dec = [
+                    np.median(decs),
+                    circstd(decs, high=np.pi, low=-np.pi) + 0.000001,
+                ]
+                medstd_roll = [np.median(rolls), circstd(rolls) + 0.000001]
+            else:
+                ras = [t[0] for t in radecroll]
+                decs = [t[1] for t in radecroll]
+                rolls = [t[2] for t in radecroll]
+                medstd_ra = [np.median(ras), circstd(ras) + 0.000001]
+                medstd_dec = [
+                    np.median(decs),
+                    circstd(decs, high=np.pi, low=-np.pi) + 0.000001,
+                ]
+                medstd_roll = [np.median(rolls), circstd(rolls) + 0.000001]
+
+            sig = 3
+            bhs = []
+            rdrs = []
+            if len(besthash) > 1:
+                for bh, rdr in zip(besthash, radecroll):
+                    if (
+                        rdr[0] > (medstd_ra[0] - sig * medstd_ra[1])
+                        and rdr[0] < (medstd_ra[0] + sig * medstd_ra[1])
+                        and rdr[1] > (medstd_dec[0] - sig * medstd_dec[1])
+                        and rdr[1] < (medstd_dec[0] + sig * medstd_dec[1])
+                        and rdr[2] > (medstd_roll[0] - sig * medstd_roll[1])
+                        and rdr[2] < (medstd_roll[0] + sig * medstd_roll[1])
+                    ):
+                        bhs.append(bh)
+                        rdrs.append(rdr)
+            else:
+                bhs = besthash
+                rdrs = radecroll
+
             if len(bhs) == 0:
                 pdb.set_trace()
+                return {"RA": None}
+
             """
             if (
                 prob_mismatch
