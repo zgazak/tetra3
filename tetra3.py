@@ -439,6 +439,7 @@ class Tetra3:
         max_fov,
         save_as=None,
         star_catalog="bsc5",
+        catalog_location="./",
         pattern_stars_per_fov=10,
         verification_stars_per_fov=20,
         star_max_magnitude=7,
@@ -517,20 +518,8 @@ class Tetra3:
         star_max_magnitude = float(star_max_magnitude)
         star_min_separation = float(star_min_separation)
         current_year = datetime.utcnow().year
+        catalog_file_full_pathname = Path(catalog_location)
 
-        catalog_file_full_pathname = Path(__file__).parent / star_catalog
-        # Add .dat suffix for hip and tyc if not present
-        if (
-            star_catalog in ("hip_main", "tyc_main")
-            and not catalog_file_full_pathname.suffix
-        ):
-            catalog_file_full_pathname = catalog_file_full_pathname.with_suffix(".dat")
-
-        catalog_file_full_pathname = Path(
-            "/home/zach.gazak/wd/pivot/plates/data/b1_358_-4.csv"
-        )
-        if star_catalog == "sstrc7":
-            catalog_file_full_pathname = Path("/data/shared/sstrc7")
         assert catalog_file_full_pathname.exists(), "No star catalogue found at " + str(
             catalog_file_full_pathname
         )
@@ -689,6 +678,360 @@ class Tetra3:
                         "Skipped %i incomplete entries." % incomplete_entries
                     )
         elif star_catalog == "sstrc7":
+            stars = cat.query_by_los_radec(
+                radec_radius_degrees * 4,
+                radec_radius_degrees * 4,
+                center_radec[0],
+                center_radec[1],
+                rootPath=catalog_file_full_pathname,
+            )
+            star_table = np.zeros((len(stars), 6), dtype=np.float32)
+
+            self._logger.info(
+                "Loading catalogue "
+                + str(star_catalog)
+                + " with "
+                + str(len(stars))
+                + " star entries."
+            )
+
+            for idx, star in tqdm(enumerate(stars), ascii=True, desc="extract"):
+                if star["mv"] is not None and star["mv"] <= star_max_magnitude:
+                    if temporal_corr:
+                        pmRA = (
+                            np.float(star["ra_pm"]) * 3.154e7
+                        )  # convert rad/sec to radians per year
+                        ra = np.float(star["ra"]) + pmRA * (current_year - 1991.25)
+                        pmDec = (
+                            np.float(star["dec_pm"]) * 3.154e7
+                        )  # convert milliarcseconds per year to degrees per year
+                        dec = np.float(star["dec"]) + pmDec * (current_year - 1991.25)
+
+                    else:
+                        dec = np.float(star["dec"])
+                        ra = np.float(star["ra"])
+
+                    rad_dist = np.arctan2(
+                        np.sin(ra - np.deg2rad(center_radec[0])),
+                        np.cos(dec - np.deg2rad(center_radec[1])),
+                    )
+                    deg_dist = np.abs((180 / np.pi) * rad_dist)
+
+                    if deg_dist <= radec_radius_degrees:
+                        star_table[idx, :] = [ra, dec, 0, 0, 0, star["mv"]]
+                    else:
+                        pass
+                        # print(deg_dist)
+                        # print(pmRA, ra, np.float(star["ra"]))
+
+        # Remove entries in which RA and Dec are both zero
+        # (i.e. keep entries in which either RA or Dec is non-zero)
+        kept = np.logical_or(star_table[:, 0] != 0, star_table[:, 1] != 0)
+        star_table = star_table[kept, :]
+        star_table = star_table[np.argsort(star_table[:, -1]), :]  # Sort by brightness
+        num_entries = star_table.shape[0]
+        self._logger.info(
+            "Loaded "
+            + str(num_entries)
+            + " stars with magnitude below "
+            + str(star_max_magnitude)
+            + "."
+        )
+
+        # Calculate star direction vectors:
+        for i in range(0, num_entries):
+            vector = np.array(
+                [
+                    np.cos(star_table[i, 0]) * np.cos(star_table[i, 1]),
+                    np.sin(star_table[i, 0]) * np.cos(star_table[i, 1]),
+                    np.sin(star_table[i, 1]),
+                ]
+            )
+            star_table[i, 2:5] = vector
+
+        # Filter for maximum number of stars in FOV and doubles
+        keep_for_patterns = [False] * star_table.shape[0]
+        keep_for_verifying = [False] * star_table.shape[0]
+        all_star_vectors = star_table[:, 2:5].transpose()
+        # Keep the first one and skip index 0 in loop
+        keep_for_patterns[0] = True
+        keep_for_verifying[0] = True
+        for star_ind in tqdm(
+            range(1, star_table.shape[0]), ascii=True, desc="filtering"
+        ):
+            vector = star_table[star_ind, 2:5]
+            # Angle to all stars we have kept
+            angs_patterns = np.dot(vector, all_star_vectors[:, keep_for_patterns])
+            angs_verifying = np.dot(vector, all_star_vectors[:, keep_for_verifying])
+            # Check double star limit as well as stars-per-fov limit
+            if star_min_separation is None or all(
+                angs_patterns < np.cos(np.deg2rad(star_min_separation))
+            ):
+                num_stars_in_fov = sum(angs_patterns > np.cos(max_fov / 2))
+                if num_stars_in_fov < pattern_stars_per_fov:
+                    # Only keep if not too many close by already
+                    keep_for_patterns[star_ind] = True
+                    keep_for_verifying[star_ind] = True
+            # Secondary stars-per-fov check, if we fail this we will not keep the star at all
+            if star_min_separation is None or all(
+                angs_verifying < np.cos(np.deg2rad(star_min_separation))
+            ):
+                num_stars_in_fov = sum(angs_verifying > np.cos(max_fov / 2))
+                if num_stars_in_fov < verification_stars_per_fov:
+                    # Only keep if not too many close by already
+                    keep_for_verifying[star_ind] = True
+        # Trim down star table and update indexing for pattern stars
+        star_table = star_table[keep_for_verifying, :]
+        pattern_stars = (np.cumsum(keep_for_verifying) - 1)[keep_for_patterns]
+
+        self._logger.info(
+            "For pattern matching with at most "
+            + str(pattern_stars_per_fov)
+            + " stars per FOV and no doubles: "
+            + str(len(pattern_stars))
+            + "."
+        )
+        self._logger.info(
+            "For verification with at most "
+            + str(verification_stars_per_fov)
+            + " stars per FOV and no doubles: "
+            + str(star_table.shape[0])
+            + "."
+        )
+
+        self._logger.debug(
+            "Building temporary hash table for finding pattern neighbours"
+        )
+        temp_coarse_sky_map = {}
+        temp_bins = 4
+        # insert the stars into the hash table
+        for star_id in tqdm(pattern_stars, ascii=True, desc="build hash"):
+            vector = star_table[star_id, 2:5]
+            # find which partition the star occupies in the hash table
+            hash_code = tuple(((vector + 1) * temp_bins).astype(np.int))
+            # if the partition is empty, create a new list to hold the star
+            # if the partition already contains stars, add the star to the list
+            temp_coarse_sky_map[hash_code] = temp_coarse_sky_map.pop(hash_code, []) + [
+                star_id
+            ]
+
+        def temp_get_nearby_stars(vector, radius):
+            """Get nearby from temporary hash table."""
+            # create list of nearby stars
+            nearby_star_ids = []
+            # given error of at most radius in each dimension, compute the space of hash codes
+            hash_code_space = [
+                range(max(low, 0), min(high + 1, 2 * temp_bins))
+                for (low, high) in zip(
+                    ((vector + 1 - radius) * temp_bins).astype(np.int),
+                    ((vector + 1 + radius) * temp_bins).astype(np.int),
+                )
+            ]
+            # iterate over hash code space
+            for hash_code in itertools.product(*hash_code_space):
+                # iterate over the stars in the given partition, adding them to
+                # the nearby stars list if they're within range of the vector
+                for star_id in temp_coarse_sky_map.get(hash_code, []):
+                    if np.dot(vector, star_table[star_id, 2:5]) > np.cos(radius):
+                        nearby_star_ids.append(star_id)
+            return nearby_star_ids
+
+        # generate pattern catalog
+        self._logger.info("Generating all possible patterns.")
+        pattern_list = []
+        # initialize pattern, which will contain pattern_size star ids
+        pattern = [None] * pattern_size
+        for pattern[0] in tqdm(
+            pattern_stars, ascii=True, desc="generate patterns"
+        ):  # star_ids_filtered:
+            vector = star_table[pattern[0], 2:5]
+            # find which partition the star occupies in the sky hash table
+            hash_code = tuple(((vector + 1) * temp_bins).astype(np.int))
+            # remove the star from the sky hash table
+            temp_coarse_sky_map[hash_code].remove(pattern[0])
+            # iterate over all possible patterns containing the removed star
+            for pattern[1:] in itertools.combinations(
+                temp_get_nearby_stars(vector, max_fov), pattern_size - 1
+            ):
+                # retrieve the vectors of the stars in the pattern
+                vectors = star_table[pattern, 2:5]
+                # verify that the pattern fits within the maximum field-of-view
+                # by checking the distances between every pair of stars in the pattern
+                if all(
+                    np.dot(*star_pair) > np.cos(max_fov)
+                    for star_pair in itertools.combinations(vectors, 2)
+                ):
+                    pattern_list.append(pattern.copy())
+
+        self._logger.info(
+            "Found " + str(len(pattern_list)) + " patterns. Building catalogue."
+        )
+        catalog_length = 2 * len(pattern_list)
+        pattern_catalog = np.zeros((catalog_length, pattern_size), dtype=np.uint16)
+        for pattern in tqdm(pattern_list, ascii=True, desc="building catalog"):
+            # retrieve the vectors of the stars in the pattern
+            vectors = star_table[pattern, 2:5]
+            # calculate and sort the edges of the star pattern
+            edges = np.sort(
+                [
+                    np.sqrt((np.subtract(*star_pair) ** 2).sum())
+                    for star_pair in itertools.combinations(vectors, 2)
+                ]
+            )
+            # extract the largest edge
+            largest_edge = edges[-1]
+            # divide the edges by the largest edge to create dimensionless ratios
+            edge_ratios = edges[:-1] / largest_edge
+            # convert edge ratio float to hash code by binning
+            hash_code = tuple((edge_ratios * pattern_bins).astype(np.int))
+            hash_index = _key_to_index(
+                hash_code, pattern_bins, pattern_catalog.shape[0]
+            )
+            # use quadratic probing to find an open space in the pattern catalog to insert
+            for index in (
+                (hash_index + offset**2) % pattern_catalog.shape[0]
+                for offset in itertools.count()
+            ):
+                # if the current slot is empty, add the pattern
+                if not pattern_catalog[index][0]:
+                    pattern_catalog[index] = pattern
+                    break
+        self._logger.info("Finished generating database.")
+        self._logger.info(
+            "Size of uncompressed star table: %i Bytes." % star_table.nbytes
+        )
+        self._logger.info(
+            "Size of uncompressed pattern catalog: %i Bytes." % pattern_catalog.nbytes
+        )
+
+        self._star_table = star_table
+        self._pattern_catalog = pattern_catalog
+        self._db_props["pattern_mode"] = "edge_ratio"
+        self._db_props["pattern_size"] = pattern_size
+        self._db_props["pattern_bins"] = pattern_bins
+        self._db_props["pattern_max_error"] = pattern_max_error
+        self._db_props["max_fov"] = np.rad2deg(max_fov)
+        self._db_props["pattern_stars_per_fov"] = pattern_stars_per_fov
+        self._db_props["verification_stars_per_fov"] = verification_stars_per_fov
+        self._db_props["star_max_magnitude"] = star_max_magnitude
+        self._db_props["star_min_separation"] = star_min_separation
+        self._logger.debug(self._db_props)
+
+        if save_as is not None:
+            self._logger.debug("Saving generated database as: " + str(save_as))
+            self.save_database(save_as)
+        else:
+            self._logger.info("Skipping database file generation.")
+
+    def generate_database_fast(
+        self,
+        max_fov,
+        save_as=None,
+        star_catalog="bsc5",
+        pattern_stars_per_fov=10,
+        verification_stars_per_fov=20,
+        star_max_magnitude=7,
+        star_min_separation=0.05,
+        pattern_max_error=0.005,
+        pattern_size=4,
+        pattern_bins=25,
+        center_radec=None,
+        radec_radius_degrees=None,
+        temporal_corr=True,
+    ):
+        """Create a database and optionally save to file. Typically takes 5 to 30 minutes.
+
+        Note:
+            If you wish to build you own database (typically for a different field-of-view) you must
+            download a star catalogue. tetra3 supports three options:
+
+            * The 285KB Yale Bright Star Catalog 'BSC5' containing 9,110 stars. This is complete to
+              to about magnitude seven and is sufficient for >10 deg field-of-view setups.
+            * The 51MB Hipparcos Catalogue 'hip_main' containing 118,218 stars. This contains about
+              three stars per square degree and is sufficient down to about >3 deg field-of-view.
+            * The 355MB Tycho Catalogue 'tyc_main' (also from the Hipparcos satellite mission)
+              containing 1,058,332 stars. This is complete to magnitude 10 and is sufficient for all tetra3 databases.
+            The 'BSC5' data is avaiable from <http://tdc-www.harvard.edu/catalogs/bsc5.html> (use
+            byte format file) and 'hip_main' and 'tyc_main' are available from
+            <https://cdsarc.u-strasbg.fr/ftp/cats/I/239/> (save the appropriate .dat file). The
+            downloaded catalogue must be placed in the tetra3 directory.
+
+        Args:
+            max_fov (float): Maximum angle (in degrees) between stars in the same pattern.
+            save_as (str or pathlib.Path, optional): Save catalog here when finished. Calls
+                :meth:`save_database`.
+            star_catalog (string, optional): Abbreviated name of star catalog, one of 'bsc5',
+                'hip_main', or 'tyc_main'.
+            pattern_stars_per_fov (int, optional): Number of stars used for pattern matching in each
+                region of size 'max_fov'.
+            verification_stars_per_fov (int, optional): Number of stars used for verification of the
+                solution in each region of size 'max_fov'.
+            star_max_magnitude (float, optional): Dimmest apparent magnitude of stars in database.
+            star_min_separation (float, optional): Smallest separation (in degrees) allowed between
+                stars (to remove doubles).
+            pattern_max_error (float, optional): Maximum difference allowed in pattern for a match.
+
+        Example:
+            ::
+
+                # Create instance
+                t3 = tetra3.Tetra3()
+                # Generate and save database
+                t3.generate_database(max_fov=20, save_as='my_database_name')
+
+
+        """
+        self._logger.info(
+            "Got generate pattern catalogue with input: "
+            + str(
+                (
+                    max_fov,
+                    save_as,
+                    star_catalog,
+                    pattern_stars_per_fov,
+                    verification_stars_per_fov,
+                    star_max_magnitude,
+                    star_min_separation,
+                    pattern_max_error,
+                )
+            )
+        )
+
+        assert (
+            star_catalog in _supported_databases
+        ), "Star catalogue name must be one of: " + str(_supported_databases)
+        max_fov = np.deg2rad(float(max_fov))
+        pattern_stars_per_fov = int(pattern_stars_per_fov)
+        verification_stars_per_fov = int(verification_stars_per_fov)
+        star_max_magnitude = float(star_max_magnitude)
+        star_min_separation = float(star_min_separation)
+        current_year = datetime.utcnow().year
+
+        catalog_file_full_pathname = Path(__file__).parent / star_catalog
+        # Add .dat suffix for hip and tyc if not present
+        if (
+            star_catalog in ("hip_main", "tyc_main")
+            and not catalog_file_full_pathname.suffix
+        ):
+            catalog_file_full_pathname = catalog_file_full_pathname.with_suffix(".dat")
+
+        catalog_file_full_pathname = Path(
+            "/home/zach.gazak/wd/pivot/plates/data/b1_358_-4.csv"
+        )
+        if star_catalog == "sstrc7":
+            catalog_file_full_pathname = Path("/home/zach.gazak/wd/sstrc7")
+        assert catalog_file_full_pathname.exists(), "No star catalogue found at " + str(
+            catalog_file_full_pathname
+        )
+
+        # Calculate number of star catalog entries:
+        num_entries = int(1)
+
+        # Preallocate star table:
+        star_table = np.zeros((num_entries, 6), dtype=np.float32)
+
+        # Read magnitude, RA, and Dec from star catalog:
+        if star_catalog == "sstrc7":
             stars = cat.query_by_los_radec(
                 radec_radius_degrees * 4,
                 radec_radius_degrees * 4,
@@ -1586,7 +1929,6 @@ class Tetra3:
                             catalog_matches.append(
                                 [float(ns) for ns in list(nearby_stars[match_ind])]
                             )
-                            print("here!")
                     # Statistical reasoning for probability that current match is incorrect:
                     num_extracted_stars = len(all_star_vectors)
                     num_nearby_catalog_stars = len(nearby_star_vectors)
@@ -1678,68 +2020,8 @@ class Tetra3:
                             "found new best at %.5f %.5f %.3f %e %.1f"
                             % (ra, dec, np.rad2deg(fov), prob_mismatch, t_solve)
                         )
-                        if stop_at_first:
-                            return best_result
-                    elif num_nearby_catalog_stars > 2:
-                        try:
-                            rotation_matrix = find_rotation_matrix(*zip(*match_tuples))
-                            # Residuals calculation
-                            measured_vs_catalog = [
-                                (np.dot(rotation_matrix.T, pair[0]), pair[1])
-                                for pair in match_tuples
-                            ]
-                            angles = np.arcsin(
-                                [
-                                    norm(np.cross(m, c)) / norm(m) / norm(c)
-                                    for (m, c) in measured_vs_catalog
-                                ]
-                            )
-                            residual = np.rad2deg(np.sqrt(np.mean(angles**2))) * 3600
-                            # extract right ascension, declination, and roll from rotation matrix
-                            ra = (
-                                np.rad2deg(
-                                    np.arctan2(
-                                        rotation_matrix[0, 1], rotation_matrix[0, 0]
-                                    )
-                                )
-                                % 360
-                            )
-                            dec = np.rad2deg(
-                                np.arctan2(
-                                    rotation_matrix[0, 2], norm(rotation_matrix[1:3, 2])
-                                )
-                            )
-                            self._logger.info(
-                                "found not best at %.5f %.5f %.3f %e"
-                                % (ra, dec, np.rad2deg(fov), prob_mismatch)
-                            )
-                        except:
-                            pass
-                        # pdb.set_trace()
-                    else:
-                        print("no stars found??")
-                        # self._logger.info("found new not best %e" % (prob_mismatch))
-                        pass
-        if best_result is not None:
-            best_result["T_solve"] = (precision_timestamp() - t0_solve) * 1000
-            return best_result
-        t_solve = (precision_timestamp() - t0_solve) * 1000
-        self._logger.debug(
-            "FAIL: Did not find a match to the stars! It took "
-            + str(round(t_solve))
-            + " ms."
-        )
-        return {
-            "RA": None,
-            "Dec": None,
-            "Roll": None,
-            "FOV": None,
-            "RMSE": None,
-            "Matches": None,
-            "Prob": None,
-            "T_solve": t_solve,
-            "T_extract": t_extract,
-        }
+                        return best_result
+        return {"RA": None}
 
     def _get_nearby_stars(self, vector, radius):
         """Get stars within radius radians of the vector."""
