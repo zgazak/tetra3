@@ -22,3 +22,5 @@
 # Databases except the default
 *.npz
 !/default_database.npz
+
+*.png

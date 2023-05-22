@@ -224,7 +224,19 @@ for idx in range(len(lines["images"])):
     # while solution["RA"] is None and count < 21:
     pcs = count
     t0 = arrow.now()
-    solution = t3.solve_from_centroids2(
+    solution2 = t3.solve_from_centroids2(
+        stars,
+        512,
+        512,
+        pattern_checking_stars=10,
+        match_threshold=1e-4,
+        match_radius=0.001,
+        fov_estimate=0.18,
+        fov_max_error=0.01,
+    )
+    # pdb.set_trace()
+    result[fname]["zg"] = {"tfit": (arrow.now() - t0).total_seconds()}
+    solution = t3.solve_from_centroids(
         stars,
         512,
         512,
@@ -268,6 +280,27 @@ for idx in range(len(lines["images"])):
     fig.add_axes(ax)
     ax.imshow(arr, cmap="Greys_r")  # , aspect="auto")
 
+    if solution2["RA"] is not None:
+        result[fname]["zg"]["resp"] = 200
+        print(solution2["RA"], solution2["Dec"], solution2["Roll"])
+        offset_error_deg = (180 / np.pi) * np.arctan2(
+            np.sin(np.deg2rad(ra) - np.deg2rad(solution2["RA"])),
+            np.cos(np.deg2rad(dec) - np.deg2rad(solution2["Dec"])),
+        )
+        result[fname]["zg"]["err"] = np.abs(offset_error_deg)
+
+        solution2["width"] = width
+        solution2["height"] = height
+
+        # ax = fig.add_subplot(1, 1, 1)
+        plot_annot(stars, ax)
+        plot_cat(solution2, ax)
+    else:
+        result[fname]["zg"]["resp"] = 204
+
+    ax.set_axis_off()
+    # ax.tight_layout()
+    fig.savefig(fname, dpi=dpi)
     if solution["RA"] is not None:
         result[fname]["t"]["resp"] = 200
         print(solution["RA"], solution["Dec"], solution["Roll"])
@@ -280,12 +313,6 @@ for idx in range(len(lines["images"])):
         solution["width"] = width
         solution["height"] = height
 
-        # ax = fig.add_subplot(1, 1, 1)
-        plot_annot(stars, ax)
-        plot_cat(solution, ax)
-        ax.set_axis_off()
-        # ax.tight_layout()
-        fig.savefig(fname, dpi=dpi)
     else:
         result[fname]["t"]["resp"] = 204
 
