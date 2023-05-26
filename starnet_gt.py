@@ -257,7 +257,7 @@ for gt_annot in all_files:
             # ax = fig.add_subplot(1, 1, 1)
             plot_cat(solution, ax)
 
-        plt.show()
         if annot["wcs"] is not None:
+            plt.show()
             astro = fits.open(BytesIO(base64.b64decode(solution["wcs"].encode())))
             pdb.set_trace()

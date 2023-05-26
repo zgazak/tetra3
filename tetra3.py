@@ -2471,7 +2471,7 @@ class Tetra3:
             besthash = []
             radecroll = []
             for q1, q2, dist in distances:
-                if dist <= 0.1 * fov:
+                if dist <= 0.2 * q1["fov"] and np.abs(q1["fov"] - q2["fov"]) < 0.1:
                     if q1 not in good_matches:
                         besthash.append(match_list[q1])
                         radecroll.append(
@@ -2484,6 +2484,7 @@ class Tetra3:
                             rot2radecroll(match_list[q2]["rotation_matrix"])
                         )
                         good_matches.append(q2)
+
             if len(radecroll) == 0:
                 use = ("match_cat_ratio", 0.5, match_ratios)
                 print(use)
