@@ -2322,7 +2322,7 @@ class Tetra3:
                         )
                         # Find all star vectors inside the (diagonal) field of view for matching
                         image_center_vector = rotation_matrix[0, :]
-                        fov_diagonal_rad = (
+                        fov_diagonal_rad = zzzzzfpdb(
                             fov * np.sqrt(width**2 + height**2) / width
                         )
 
@@ -2382,6 +2382,7 @@ class Tetra3:
                         )
 
                         radecroll = rot2radecroll(rotation_matrix)
+                        """
                         errcent = (180 / np.pi) * np.arctan2(
                             np.sin(radecroll[0] - np.deg2rad(5)),
                             np.cos(radecroll[1] - np.deg2rad(-3)),
@@ -2391,7 +2392,7 @@ class Tetra3:
                             import pdb
 
                             pdb.set_trace()
-
+                        """
                         match = {
                             "nbs": nbs,
                             "image_center_vector": image_center_vector,
@@ -2468,9 +2469,9 @@ class Tetra3:
                 besthash = match_list
                 radecroll = [rot2radecroll(match_list[0]["rotation_matrix"])]
             distances = []
-            import pdb
+            # import pdb
 
-            pdb.set_trace()
+            # pdb.set_trace()
             for idx, match in enumerate(match_list):
                 for idxc, matchc in enumerate(match_list):
                     if idx != idxc:
@@ -2494,27 +2495,13 @@ class Tetra3:
                 rdr = rot2radecroll(match_list[q1]["rotation_matrix"])
 
                 print([np.rad2deg(x) for x in rdr])
-                print(
-                    (180 / np.pi)
-                    * np.arctan2(
-                        np.sin(rdr[0] - np.deg2rad(5)),
-                        np.cos(rdr[1] - np.deg2rad(-3)),
-                    )
-                )
 
                 rdr = rot2radecroll(match_list[q2]["rotation_matrix"])
 
                 print([np.rad2deg(x) for x in rdr])
-                print(
-                    (180 / np.pi)
-                    * np.arctan2(
-                        np.sin(rdr[0] - np.deg2rad(5)),
-                        np.cos(rdr[1] - np.deg2rad(-3)),
-                    )
-                )
 
                 print(dist)
-                pdb.set_trace()
+                # pdb.set_trace()
                 if (
                     dist <= 0.2 * match_list[q1]["fov"]
                     and np.abs(match_list[q1]["fov"] - match_list[q2]["fov"]) < 0.2
