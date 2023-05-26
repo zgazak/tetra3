@@ -2492,6 +2492,7 @@ class Tetra3:
             if len(radecroll) == 0:
                 use = ("match_cat_ratio", 0.5, match_ratios)
                 print(use)
+                pdb.set_trace()
                 for match in match_list:
                     if match[use[0]] >= use[2][int(use[1] * len(use[2]))]:
                         besthash.append(match)

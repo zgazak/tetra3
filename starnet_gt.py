@@ -240,6 +240,8 @@ for gt_annot in all_files:
             pattern_checking_stars=10,
             match_threshold=1e-4,
             match_radius=0.001,
+            fov_estimate=0.3,
+            fov_max_error=0.1,
         )
 
         if solution["RA"] is not None:
