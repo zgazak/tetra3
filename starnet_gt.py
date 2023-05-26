@@ -22,11 +22,11 @@ all_files = glob("/data/zgazak/astrometry/star_annots/*/ImageFiles/*.json")
 def plates_catalog(
     fov=0.2, ra=0, dec=0, grid_coarse_deg=1, grid_rad=1, pattern_size=4, num_per_fov=6
 ):
-    ra = round(ra, -1)
-    dec = round(dec, -1)
-
+    # ra = round(ra, -1)
+    # dec = round(dec, -1)
+    """
     best_dist = None
-    for r in sorted(set([round(r, -1) + grid_coarse_deg for r in range(355)])):
+    for r in sorted(set([round(r, -1) + grid_coarse_deg for r in range(360)])):
         for d in sorted(
             set([round(r, -1) + grid_coarse_deg for r in np.arange(-90, 85)])
         ):
@@ -38,6 +38,10 @@ def plates_catalog(
                 cra = r
                 cdec = d
                 print(np.rad2deg(best_dist), cra, cdec)
+    """
+    cra = round(ra)
+    cdec = round(dec)
+    print(ra, cra, dec, cdec)
 
     db_name = "tFOV_fullgrid_%.1f_%i_%i_%i_%i_%i.npz" % (
         fov,
