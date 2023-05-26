@@ -2471,7 +2471,10 @@ class Tetra3:
             besthash = []
             radecroll = []
             for q1, q2, dist in distances:
-                if dist <= 0.2 * q1["fov"] and np.abs(q1["fov"] - q2["fov"]) < 0.1:
+                if (
+                    dist <= 0.2 * match_list[q1]["fov"]
+                    and np.abs(match_list[q1]["fov"] - match_list[q2]["fov"]) < 0.2
+                ):
                     if q1 not in good_matches:
                         besthash.append(match_list[q1])
                         radecroll.append(
