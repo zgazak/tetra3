@@ -2498,7 +2498,8 @@ class Tetra3:
                         for x in rot2radecroll(match_list[q2]["rotation_matrix"])
                     ]
                 )
-
+                print(dist)
+                pdb.set_trace()
                 if (
                     dist <= 0.2 * match_list[q1]["fov"]
                     and np.abs(match_list[q1]["fov"] - match_list[q2]["fov"]) < 0.2
