@@ -9,23 +9,25 @@ import matplotlib.pyplot as plt
 all_files = glob("/data/zgazak/astrometry/star_annots/*/ImageFiles/*.json")
 
 
-def plates_stars(annot):
+def plates_stars(annot, width, height):
     stars = []
     for obj in annot["objects"]:
         if obj["type"] == "line":
-            stars.append([obj["y_center"], obj["x_center"], obj["iso_flux"]])
+            stars.append(
+                [obj["y_center"] * height, obj["x_center"] * width, obj["iso_flux"]]
+            )
     stars.sort(key=lambda x: x[-1])
     return stars
 
 
-def dotnet_stars(annot):
+def dotnet_stars(annot, width, height):
     anet_list = []
     for obj in annot["objects"]:
         if obj["type"] == "line":
             anet_list.append(
                 {
-                    "xpix": obj["x_center"],
-                    "ypix": obj["y_center"],
+                    "xpix": obj["x_center"] * width,
+                    "ypix": obj["y_center"] * height,
                     "flux": obj["iso_flux"],
                 }
             )
@@ -55,12 +57,14 @@ for gt_annot in all_files:
     ).replace(".json", ".fits")
     if os.path.exists(raw):
         annot = json.load(open(gt_annot, "r"))
-        gt_plates = plates_stars(annot)
-
         raw_data = fits.open(raw)[0]
         arr = zscale(raw_data.data)
+        width = arr.shape[0]
+        height = arr.shape[1]
 
-        ax = prep_axes(arr.shape[0], arr.shape[1])
+        gt_plates = plates_stars(annot, width, height)
+
+        ax = prep_axes(width, height)
         ax.imshow(arr, cmap="Greys_r")
         plot_annot(gt_plates, ax)
 
