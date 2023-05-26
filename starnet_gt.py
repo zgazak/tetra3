@@ -5,8 +5,37 @@ from glob import glob
 from astropy.io import fits
 from shs.eval.image import zscale
 import matplotlib.pyplot as plt
+import numpy as np
+from astropy.coordinates import angular_separation
 
 all_files = glob("/data/zgazak/astrometry/star_annots/*/ImageFiles/*.json")
+
+
+def plates_catalog(fov=0.2, ra=0, dec=0, grid_rad=6, pattern_size=4, num_per_fov=6):
+    ra = round(ra, -1)
+    dec = round(dec, -1)
+
+    best_dist = None
+    for r in sorted(set([round(r, -1) + 5 for r in range(355)])):
+        for d in sorted(set([round(r, -1) + 5 for r in np.arange(-90, 85)])):
+            dist = angular_separation(
+                np.deg2rad(ra), np.deg2rad(dec), np.deg2rad(r), np.deg2rad(d)
+            )
+            if best_dist is None or dist < best_dist:
+                best_dist = dist
+                cra = r
+                cdec = d
+                print(np.rad2deg(best_dist), cra, cdec)
+
+    db_name = "tFOV_fullgrid_%.1f_%i_%i_%i_%i_%i" % (
+        fov,
+        int(cra),
+        int(cdec),
+        int(grid_rad),
+        pattern_size,
+        num_per_fov,
+    )
+    return db_name
 
 
 def plates_stars(annot, width, height):
@@ -66,7 +95,16 @@ for gt_annot in all_files:
 
         ax = prep_axes(width, height)
         ax.imshow(arr, cmap="Greys_r")
+
         plot_annot(gt_plates, ax)
+
+        expected_ra_hms = np.array(
+            [float(x) for x in raw_data.header["OBJCTRA"].split(" ")]
+        )
+        expected_dec_dms = [float(x) for x in raw_data.header["OBJCTDEC"].split(" ")]
+
+        expected_ra_deg = (expected_ra_hms / np.array([1, 60, 3600])).sum()
+        expected_dec_deg = (expected_dec_dms / np.array([1, 60, 3600])).sum()
 
         plt.show()
         pdb.set_trace()
