@@ -2381,6 +2381,17 @@ class Tetra3:
                             1 - prob_single_star_mismatch,
                         )
 
+                        radecroll = rot2radecroll(rotation_matrix)
+                        errcent = (180 / np.pi) * np.arctan2(
+                            np.sin(radecroll[0] - np.deg2rad(5)),
+                            np.cos(radecroll[1] - np.deg2rad(-3)),
+                        )
+                        print(errcent, radecroll)
+                        if np.abs(errcent) > 2:
+                            import pdb
+
+                            pdb.set_trace()
+
                         match = {
                             "nbs": nbs,
                             "image_center_vector": image_center_vector,
