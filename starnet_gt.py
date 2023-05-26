@@ -219,7 +219,14 @@ for gt_annot in all_files:
         expected_dec_dms = [float(x) for x in raw_data.header["OBJCTDEC"].split(" ")]
 
         expected_ra_deg = 15 * (expected_ra_hms / np.array([1, 60, 3600])).sum()
-        expected_dec_deg = (expected_dec_dms / np.array([1, 60, 3600])).sum()
+        if expected_dec_dms[0] > 0:
+            expected_dec_deg = (expected_dec_dms / np.array([1, 60, 3600])).sum()
+        else:
+            expected_dec_deg = (
+                expected_dec_dms[0]
+                - (expected_dec_dms[0] / 60)
+                - (expected_dec_dms[0] / 3600)
+            )
 
         plate_db, plate_cfg = plates_catalog(
             fov=0.4, ra=expected_ra_deg, dec=expected_dec_deg, grid_rad=2
