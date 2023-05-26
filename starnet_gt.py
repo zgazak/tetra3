@@ -220,9 +220,10 @@ for gt_annot in all_files:
         expected_ra_deg = (expected_ra_hms / np.array([1, 60, 3600])).sum()
         expected_dec_deg = (expected_dec_dms / np.array([1, 60, 3600])).sum()
 
-        plate_db, plate_cfg = (
-            plates_catalog(fov=0.5, ra=expected_ra_deg, dec=expected_dec_deg) + ".npz"
+        plate_db, plate_cfg = plates_catalog(
+            fov=0.5, ra=expected_ra_deg, dec=expected_dec_deg
         )
+        plate_db += ".npz"
         if not os.path.exists(plate_db):
             t3.generate_database(**plate_cfg)
 
