@@ -5,6 +5,13 @@ from glob import glob
 from astropy.io import fits
 from shs.eval.image import zscale
 import matplotlib.pyplot as plt
+import tetra3
+from astropy import wcs
+
+import sstr7 as cat
+import astropy.units as u
+import seaborn as sns
+from astropy.coordinates import SkyCoord
 import numpy as np
 from astropy.coordinates import angular_separation
 
@@ -75,8 +82,97 @@ def prep_axes(width, height, dpi=150):
     return ax
 
 
+def sol2wcs(solution):
+    cd = solution["FOV"] / solution["width"]
+
+    wc = {
+        "CTYPE1": "RA---TAN",
+        "CTYPE2": "DEC--TAN",
+        "CRVAL1": solution["RA"],
+        "CRVAL2": solution["Dec"],
+        "CUNIT1": "deg",
+        "CUNIT2": "deg",
+        "CRPIX1": solution["width"] / 2,
+        "CRPIX2": solution["height"] / 2,
+        # "CDELT1": np.deg2rad(solution["FOV"] / solution["width"]),
+        # "CDELT2": np.deg2rad(solution["FOV"] / solution["height"]),
+        "CD1_1": cd * np.cos(np.deg2rad(solution["Roll"] - 180)),
+        "CD1_2": cd * -np.sin(np.deg2rad(solution["Roll"] - 180)),
+        "CD2_1": cd * np.sin(np.deg2rad(solution["Roll"] - 180)),
+        "CD2_2": cd * np.cos(np.deg2rad(solution["Roll"] - 180)),
+        "NAXIS": 2,
+        "NAXIS1": solution["width"],
+        "NAXIS2": solution["height"],
+    }
+    return wc
+
+
 def plot_annot(stars, ax):
     ax.plot([s[1] for s in stars], [s[0] for s in stars], marker="x", c="tab:red", lw=0)
+
+
+def plot_cat(solution, ax):
+    # print(json.dumps(solution, indent=2))
+    wc = sol2wcs(solution)
+    wf = wcs.WCS(wc)
+
+    starsf = cat.query_by_los_radec(
+        solution["FOV"] * 2,
+        solution["FOV"] * 2,
+        solution["RA"],
+        solution["Dec"],
+        rootPath="/data/shared/sstrc7",
+    )
+    starxw = []
+    staryw = []
+    for star in starsf:
+        stc = SkyCoord(
+            ra=np.rad2deg(star["ra"] + (star["ra_pm"] * 3.154e7 * (2018.0 - 1991.25)))
+            * u.deg,
+            dec=np.rad2deg(
+                star["dec"] + (star["dec_pm"] * 3.154e7 * (2018.0 - 1991.25))
+            )
+            * u.deg,
+            frame="icrs",
+            obstime="2018-01-02T12:34:56",
+        )
+        xf, yf = wf.world_to_pixel(stc)
+        xf, yf = wf.wcs_world2pix(
+            [[np.rad2deg(star["ra"]), np.rad2deg(star["dec"])]], 0
+        )[0]
+        if (
+            star["mv"] < 19
+            and xf > 0
+            and xf < solution["width"]
+            and yf > 0
+            and yf < solution["height"]
+        ):
+            staryw.append(yf)
+            starxw.append(xf)
+
+    # plt.scatter(stary, starx, s=7, color="red")
+    ax.plot(starxw, staryw, marker="+", c="black", lw=0)
+    catx = []
+    caty = []
+
+    for star in solution["catmatch"]:
+        x, y = wf.wcs_world2pix([[np.rad2deg(star[0]), np.rad2deg(star[1])]], 0)[0]
+        catx.append(x)
+        caty.append(y)
+
+    ax.plot(catx, caty, marker="o", c="blue", lw=0, markerfacecolor="None")
+    colors = sns.color_palette("Spectral", n_colors=len(solution["quads"]))
+
+    for idxx, quad in enumerate(solution["quads"]):
+        qua = [wf.wcs_world2pix(np.rad2deg(s[0]), np.rad2deg(s[1]), 0) for s in quad]
+
+        for idx in range(len(qua) - 1):
+            ax.plot(
+                [qua[0][0], qua[idx + 1][0]],
+                [qua[0][1], qua[idx + 1][1]],
+                c=colors[idxx],
+                lw=1,
+            )
 
 
 for gt_annot in all_files:
@@ -92,6 +188,7 @@ for gt_annot in all_files:
         height = arr.shape[1]
 
         gt_plates = plates_stars(annot, width, height)
+        stars = np.array([s[:2] for s in gt_plates])
 
         expected_ra_hms = np.array(
             [float(x) for x in raw_data.header["OBJCTRA"].split(" ")]
@@ -107,7 +204,36 @@ for gt_annot in all_files:
             ax.imshow(arr, cmap="Greys_r")
 
             plot_annot(gt_plates, ax)
+
+            t3 = tetra3.Tetra3()
+            t3.load_database(plate_db)
+            solution = t3.solve_from_centroids2(
+                stars,
+                width,
+                height,
+                pattern_checking_stars=10,
+                match_threshold=1e-4,
+                match_radius=0.001,
+            )
+
+            if solution["RA"] is not None:
+                # result[fname]["zg"]["resp"] = 200
+                print(
+                    solution["FOV"], solution["RA"], solution["Dec"], solution["Roll"]
+                )
+                offset_error_deg = (180 / np.pi) * np.arctan2(
+                    np.sin(np.deg2rad(expected_ra_deg) - np.deg2rad(solution["RA"])),
+                    np.cos(np.deg2rad(expected_dec_deg) - np.deg2rad(solution["Dec"])),
+                )
+                # result[fname]["zg"]["err"] = np.abs(offset_error_deg)
+
+                solution["width"] = width
+                solution["height"] = height
+
+                # ax = fig.add_subplot(1, 1, 1)
+                plot_cat(solution, ax)
             plt.show()
+
             pdb.set_trace()
         else:
             print("no catalog for %s yet" % plate_db)
