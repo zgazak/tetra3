@@ -18,13 +18,17 @@ from astropy.coordinates import angular_separation
 all_files = glob("/data/zgazak/astrometry/star_annots/*/ImageFiles/*.json")
 
 
-def plates_catalog(fov=0.2, ra=0, dec=0, grid_rad=6, pattern_size=4, num_per_fov=6):
+def plates_catalog(
+    fov=0.2, ra=0, dec=0, grid_coarse_deg=1, grid_rad=1, pattern_size=4, num_per_fov=6
+):
     ra = round(ra, -1)
     dec = round(dec, -1)
 
     best_dist = None
-    for r in sorted(set([round(r, -1) + 5 for r in range(355)])):
-        for d in sorted(set([round(r, -1) + 5 for r in np.arange(-90, 85)])):
+    for r in sorted(set([round(r, -1) + grid_coarse_deg for r in range(355)])):
+        for d in sorted(
+            set([round(r, -1) + grid_coarse_deg for r in np.arange(-90, 85)])
+        ):
             dist = angular_separation(
                 np.deg2rad(ra), np.deg2rad(dec), np.deg2rad(r), np.deg2rad(d)
             )
@@ -42,6 +46,22 @@ def plates_catalog(fov=0.2, ra=0, dec=0, grid_rad=6, pattern_size=4, num_per_fov
         pattern_size,
         num_per_fov,
     )
+
+    db_gen_params = {
+        "max_fov": fov * 1.1,
+        "save_as": str(db_name),
+        "star_catalog": "sstrc7",
+        "catalog_location": "/data/shared/sstrc7",
+        "pattern_stars_per_fov": int(num_per_fov),
+        "verification_stars_per_fov": int(400),
+        "star_max_magnitude": 19,
+        "star_min_separation": 0.001,
+        "pattern_max_error": 0.01,
+        "pattern_size": int(pattern_size),
+        "temporal_corr": True,
+        "center_radec": [int(cra), int(cdec)],
+        "radec_radius_degrees": grid_rad,
+    }
     return db_name
 
 
@@ -181,6 +201,8 @@ for gt_annot in all_files:
         os.path.sep.join(gt_annot.split(os.path.sep)[-3:]),
     ).replace(".json", ".fits")
     if os.path.exists(raw):
+        t3 = tetra3.Tetra3()
+
         annot = json.load(open(gt_annot, "r"))
         raw_data = fits.open(raw)[0]
         arr = zscale(raw_data.data)
@@ -198,42 +220,42 @@ for gt_annot in all_files:
         expected_ra_deg = (expected_ra_hms / np.array([1, 60, 3600])).sum()
         expected_dec_deg = (expected_dec_dms / np.array([1, 60, 3600])).sum()
 
-        plate_db = plates_catalog(ra=expected_ra_deg, dec=expected_dec_deg) + ".npz"
-        if os.path.exists(plate_db):
-            ax = prep_axes(width, height)
-            ax.imshow(arr, cmap="Greys_r")
+        plate_db, plate_cfg = (
+            plates_catalog(fov=0.5, ra=expected_ra_deg, dec=expected_dec_deg) + ".npz"
+        )
+        if not os.path.exists(plate_db):
+            t3.generate_database(**plate_cfg)
 
-            plot_annot(gt_plates, ax)
+        ax = prep_axes(width, height)
+        ax.imshow(arr, cmap="Greys_r")
 
-            t3 = tetra3.Tetra3()
-            t3.load_database(plate_db)
-            solution = t3.solve_from_centroids2(
-                stars,
-                width,
-                height,
-                pattern_checking_stars=10,
-                match_threshold=1e-4,
-                match_radius=0.001,
+        plot_annot(gt_plates, ax)
+
+        t3.load_database(plate_db)
+        solution = t3.solve_from_centroids2(
+            stars,
+            width,
+            height,
+            pattern_checking_stars=10,
+            match_threshold=1e-4,
+            match_radius=0.001,
+        )
+
+        if solution["RA"] is not None:
+            # result[fname]["zg"]["resp"] = 200
+            print(solution["FOV"], solution["RA"], solution["Dec"], solution["Roll"])
+            offset_error_deg = (180 / np.pi) * np.arctan2(
+                np.sin(np.deg2rad(expected_ra_deg) - np.deg2rad(solution["RA"])),
+                np.cos(np.deg2rad(expected_dec_deg) - np.deg2rad(solution["Dec"])),
             )
+            # result[fname]["zg"]["err"] = np.abs(offset_error_deg)
 
-            if solution["RA"] is not None:
-                # result[fname]["zg"]["resp"] = 200
-                print(
-                    solution["FOV"], solution["RA"], solution["Dec"], solution["Roll"]
-                )
-                offset_error_deg = (180 / np.pi) * np.arctan2(
-                    np.sin(np.deg2rad(expected_ra_deg) - np.deg2rad(solution["RA"])),
-                    np.cos(np.deg2rad(expected_dec_deg) - np.deg2rad(solution["Dec"])),
-                )
-                # result[fname]["zg"]["err"] = np.abs(offset_error_deg)
+            solution["width"] = width
+            solution["height"] = height
 
-                solution["width"] = width
-                solution["height"] = height
+            # ax = fig.add_subplot(1, 1, 1)
+            plot_cat(solution, ax)
 
-                # ax = fig.add_subplot(1, 1, 1)
-                plot_cat(solution, ax)
-            plt.show()
+        plt.show()
 
-            pdb.set_trace()
-        else:
-            print("no catalog for %s yet" % plate_db)
+        pdb.set_trace()
