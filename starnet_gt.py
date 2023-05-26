@@ -49,7 +49,7 @@ def plates_catalog(
     )
 
     db_gen_params = {
-        "max_fov": fov * 1.1,
+        "max_fov": fov,
         "save_as": str(db_name),
         "star_catalog": "sstrc7",
         "catalog_location": "/data/shared/sstrc7",
