@@ -41,6 +41,7 @@ def prep_axes(width, height, dpi=150):
     ax = plt.Axes(fig, [0.0, 0.0, 1.0, 1.0])
     ax.set_axis_off()
     fig.add_axes(ax)
+    return ax
 
 
 def plot_annot(stars, ax):
