@@ -62,7 +62,7 @@ def plates_catalog(
         "center_radec": [int(cra), int(cdec)],
         "radec_radius_degrees": grid_rad,
     }
-    return db_name
+    return db_name, db_gen_params
 
 
 def plates_stars(annot, width, height):
