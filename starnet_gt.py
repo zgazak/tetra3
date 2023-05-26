@@ -10,7 +10,12 @@ all_files = glob("/data/zgazak/astrometry/star_annots/*/ImageFiles/*.json")
 
 
 def plates_stars(annot):
-    pdb.set_trace()
+    stars = []
+    for obj in annot["objects"]:
+        if obj["type"] == "line":
+            stars.append([obj["y_center"], obj["x_center"], obj["isoflux"]])
+    stars.sort(key=lambda x: x[-1])
+    return stars
 
 
 def prep_axes(width, height, dpi=150):
