@@ -7,9 +7,10 @@ from shs.eval.image import zscale
 import matplotlib.pyplot as plt
 import tetra3
 from astropy import wcs
-
+from io import BytesIO
 import sstr7 as cat
 import astropy.units as u
+import base64
 import seaborn as sns
 from astropy.coordinates import SkyCoord
 import numpy as np
@@ -257,5 +258,6 @@ for gt_annot in all_files:
             plot_cat(solution, ax)
 
         plt.show()
-
-        pdb.set_trace()
+        if solution["wcs"]:
+            astro = fits.open(BytesIO(base64.b64decode(solution["wcs"].encode())))
+            pdb.set_trace()
