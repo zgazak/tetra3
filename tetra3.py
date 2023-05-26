@@ -2322,7 +2322,7 @@ class Tetra3:
                         )
                         # Find all star vectors inside the (diagonal) field of view for matching
                         image_center_vector = rotation_matrix[0, :]
-                        fov_diagonal_rad = zzzzzfpdb(
+                        fov_diagonal_rad = (
                             fov * np.sqrt(width**2 + height**2) / width
                         )
 
