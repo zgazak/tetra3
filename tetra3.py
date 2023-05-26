@@ -2468,6 +2468,9 @@ class Tetra3:
                 besthash = match_list
                 radecroll = [rot2radecroll(match_list[0]["rotation_matrix"])]
             distances = []
+            import pdb
+
+            pdb.set_trace()
             for idx, match in enumerate(match_list):
                 for idxc, matchc in enumerate(match_list):
                     if idx != idxc:
@@ -2516,7 +2519,6 @@ class Tetra3:
             if len(radecroll) == 0:
                 use = ("match_cat_ratio", 0.5, match_ratios)
                 print(use)
-                pdb.set_trace()
                 for match in match_list:
                     if match[use[0]] >= use[2][int(use[1] * len(use[2]))]:
                         besthash.append(match)
