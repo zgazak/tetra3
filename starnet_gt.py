@@ -265,7 +265,7 @@ for gt_annot in all_files:
 
             # ax = fig.add_subplot(1, 1, 1)
             plot_cat(solution, ax)
-
+            print(expected_ra_deg, expected_dec_deg)
         if annot["wcs"] is not None:
             plt.show()
             astro = fits.open(BytesIO(base64.b64decode(annot["wcs"].encode())))
