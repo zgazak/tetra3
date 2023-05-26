@@ -69,3 +69,4 @@ for gt_annot in all_files:
         plot_annot(gt_plates, ax)
 
         plt.show()
+        pdb.set_trace()
