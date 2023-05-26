@@ -38,7 +38,7 @@ def plates_catalog(
                 cdec = d
                 print(np.rad2deg(best_dist), cra, cdec)
 
-    db_name = "tFOV_fullgrid_%.1f_%i_%i_%i_%i_%i" % (
+    db_name = "tFOV_fullgrid_%.1f_%i_%i_%i_%i_%i.npz" % (
         fov,
         int(cra),
         int(cdec),
@@ -54,7 +54,7 @@ def plates_catalog(
         "catalog_location": "/data/shared/sstrc7",
         "pattern_stars_per_fov": int(num_per_fov),
         "verification_stars_per_fov": int(400),
-        "star_max_magnitude": 19,
+        "star_max_magnitude": 17,
         "star_min_separation": 0.001,
         "pattern_max_error": 0.01,
         "pattern_size": int(pattern_size),
@@ -161,7 +161,7 @@ def plot_cat(solution, ax):
             [[np.rad2deg(star["ra"]), np.rad2deg(star["dec"])]], 0
         )[0]
         if (
-            star["mv"] < 19
+            star["mv"] < 17
             and xf > 0
             and xf < solution["width"]
             and yf > 0
@@ -223,7 +223,6 @@ for gt_annot in all_files:
         plate_db, plate_cfg = plates_catalog(
             fov=0.5, ra=expected_ra_deg, dec=expected_dec_deg
         )
-        plate_db += ".npz"
         if not os.path.exists(plate_db):
             t3.generate_database(**plate_cfg)
 
