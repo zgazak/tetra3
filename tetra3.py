@@ -2490,6 +2490,9 @@ class Tetra3:
                         good_matches.append(q2)
 
             if len(radecroll) == 0:
+                import pdb
+
+                pdb.set_trace()
                 use = ("match_cat_ratio", 0.5, match_ratios)
                 print(use)
                 for match in match_list:
