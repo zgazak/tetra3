@@ -2485,19 +2485,34 @@ class Tetra3:
             besthash = []
             radecroll = []
             for q1, q2, dist in distances:
-                print(match_list[q1]["fov"], match_list[q2]["fov"], dist)
                 print(
-                    [
-                        np.rad2deg(x)
-                        for x in rot2radecroll(match_list[q1]["rotation_matrix"])
-                    ]
+                    np.rad2deg(match_list[q1]["fov"]),
+                    np.rad2deg(match_list[q2]["fov"]),
+                    dist,
                 )
+
+                rdr = rot2radecroll(match_list[q1]["rotation_matrix"])
+
+                print([np.rad2deg(x) for x in rdr])
                 print(
-                    [
-                        np.rad2deg(x)
-                        for x in rot2radecroll(match_list[q2]["rotation_matrix"])
-                    ]
+                    (180 / np.pi)
+                    * np.arctan2(
+                        np.sin(rdr[0] - np.deg2rad(5)),
+                        np.cos(rdr[1] - np.deg2rad(-3)),
+                    )
                 )
+
+                rdr = rot2radecroll(match_list[q2]["rotation_matrix"])
+
+                print([np.rad2deg(x) for x in rdr])
+                print(
+                    (180 / np.pi)
+                    * np.arctan2(
+                        np.sin(rdr[0] - np.deg2rad(5)),
+                        np.cos(rdr[1] - np.deg2rad(-3)),
+                    )
+                )
+
                 print(dist)
                 pdb.set_trace()
                 if (
