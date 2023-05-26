@@ -93,11 +93,6 @@ for gt_annot in all_files:
 
         gt_plates = plates_stars(annot, width, height)
 
-        ax = prep_axes(width, height)
-        ax.imshow(arr, cmap="Greys_r")
-
-        plot_annot(gt_plates, ax)
-
         expected_ra_hms = np.array(
             [float(x) for x in raw_data.header["OBJCTRA"].split(" ")]
         )
@@ -106,5 +101,13 @@ for gt_annot in all_files:
         expected_ra_deg = (expected_ra_hms / np.array([1, 60, 3600])).sum()
         expected_dec_deg = (expected_dec_dms / np.array([1, 60, 3600])).sum()
 
-        plt.show()
-        pdb.set_trace()
+        plate_db = plates_catalog(ra=expected_ra_deg, dec=expected_dec_deg) + ".npz"
+        if os.path.exists(plate_db):
+            ax = prep_axes(width, height)
+            ax.imshow(arr, cmap="Greys_r")
+
+            plot_annot(gt_plates, ax)
+            plt.show()
+            pdb.set_trace()
+        else:
+            print("no catalog for %s yet" % plate_db)
