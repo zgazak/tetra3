@@ -218,7 +218,7 @@ for gt_annot in all_files:
         )
         expected_dec_dms = [float(x) for x in raw_data.header["OBJCTDEC"].split(" ")]
 
-        expected_ra_deg = (expected_ra_hms / np.array([1, 60, 3600])).sum()
+        expected_ra_deg = 15 * (expected_ra_hms / np.array([1, 60, 3600])).sum()
         expected_dec_deg = (expected_dec_dms / np.array([1, 60, 3600])).sum()
 
         plate_db, plate_cfg = plates_catalog(
