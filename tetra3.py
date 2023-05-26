@@ -2464,6 +2464,7 @@ class Tetra3:
                         rm2 = matchc["rotation_matrix"]
                         distance = np.arccos(((rm1.dot(rm2.T)).trace() - 1) / 2)
                         distances.append([idx, idxc, distance])
+            print("distances", distances)
             good_matches = []
             bhs = []
             rdrs = []
