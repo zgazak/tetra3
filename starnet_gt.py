@@ -13,9 +13,25 @@ def plates_stars(annot):
     stars = []
     for obj in annot["objects"]:
         if obj["type"] == "line":
-            stars.append([obj["y_center"], obj["x_center"], obj["isoflux"]])
+            stars.append([obj["y_center"], obj["x_center"], obj["iso_flux"]])
     stars.sort(key=lambda x: x[-1])
     return stars
+
+
+def dotnet_stars(annot):
+    anet_list = []
+    for obj in annot["objects"]:
+        if obj["type"] == "line":
+            anet_list.append(
+                {
+                    "xpix": obj["x_center"],
+                    "ypix": obj["y_center"],
+                    "flux": obj["iso_flux"],
+                }
+            )
+    anet_list.sort(key=lambda x: x["flux"])
+    pdb.set_trace()
+    return anet_list
 
 
 def prep_axes(width, height, dpi=150):
