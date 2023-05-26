@@ -250,7 +250,7 @@ for gt_annot in all_files:
             height,
             pattern_checking_stars=10,
             match_threshold=1e-4,
-            match_radius=0.001,
+            match_radius=0.01,
             fov_estimate=0.4,
             fov_max_error=0.3,
         )

@@ -2044,7 +2044,7 @@ class Tetra3:
     ):
         """Solve for the sky location of an image.
 
-        Star locations (centroids) are found using :meth:`tetra3.get_centroids_from_image` and
+        Star locations (centroids) are found using :metzfdh:`tetra3.get_centroids_from_image` and
         keyword arguments are passed along to this method. Every combination of the
         `pattern_checking_stars` (default 6) brightest stars found is checked against the database
         before giving up.
@@ -2472,6 +2472,19 @@ class Tetra3:
             radecroll = []
             for q1, q2, dist in distances:
                 print(match_list[q1]["fov"], match_list[q2]["fov"], dist)
+                print(
+                    [
+                        np.rad2deg(x)
+                        for x in rot2radecroll(match_list[q1]["rotation_matrix"])
+                    ]
+                )
+                print(
+                    [
+                        np.rad2deg(x)
+                        for x in rot2radecroll(match_list[q2]["rotation_matrix"])
+                    ]
+                )
+
                 if (
                     dist <= 0.2 * match_list[q1]["fov"]
                     and np.abs(match_list[q1]["fov"] - match_list[q2]["fov"]) < 0.2
